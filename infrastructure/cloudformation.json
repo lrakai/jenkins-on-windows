@@ -1,0 +1,282 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Cloud Academy Jenkins Lab",
+    "Parameters": {
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t2.large"
+        },
+        "Region": {
+            "Type": "String",
+            "Default": "us-west-2"
+        },
+        "KeyName": {
+            "Description": "Keypair name",
+            "Type": "String",
+            "Default": "{KeyName}"
+        },
+        "AMI": {
+            "Type": "String",
+            "Default": "ami-6b933213"
+        },
+        "AMIUser": {
+            "Type": "String",
+            "Default": "ec2-user"
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.10.10.0/24"
+            },
+            "Public": {
+                "CIDR": "10.10.10.0/24"
+            }
+        }
+    },
+    "Resources": {
+        "JenkinsLabVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    }
+                ]
+            }
+        },
+        "JenkinsLabPublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "JenkinsLabVPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "Public",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Network",
+                        "Value": "Public"
+                    }
+                ]
+            }
+        },
+        "JenkinsLabInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "JenkinsLabInternetGatewayAttach": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "JenkinsLabVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "JenkinsLabInternetGateway"
+                }
+            }
+        },
+        "JenkinsLabPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "JenkinsLabVPC"
+                }
+            }
+        },
+        "JenkinsLabPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "JenkinsLabPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "JenkinsLabInternetGateway"
+                }
+            }
+        },
+        "JenkinsLabPublicRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "JenkinsLabPublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "JenkinsLabPublicRouteTable"
+                }
+            }
+        },
+        "JenkinsLabInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "JenkinsLab"
+                    }
+                ],
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "true",
+                        "GroupSet": [
+                            {
+                                "Ref": "JenkinsLabSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "JenkinsLabPublicSubnet"
+                        },
+                        "DeviceIndex": "0"
+                    }
+                ]
+            }
+        },
+        "JenkinsLabSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "JenkinsLab",
+                "VpcId": {
+                    "Ref": "JenkinsLabVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "3389",
+                        "ToPort": "3389",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "JenkinsLab"
+                    }
+                ]
+            }
+        },
+        "Group": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "GroupName": "Students",
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "students-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "ec2:TerminateInstances",
+                                        "ec2:StopInstances",
+                                        "ec2:StartInstances",
+                                        "ec2:AuthorizeSecurityGroupIngress",
+                                        "ec2:GetPasswordData",
+                                        "ec2:AuthorizeSecurityGroupEgress"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "ec2:Region": "us-west-2"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "Stmt1495494022000",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:GetMetricData",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "cloudwatch:ListMetrics",
+                                        "cloudwatch:DescribeAlarms"
+                                    ],
+                                    "Resource": [
+                                        "*"
+                                    ]
+                                },
+                                {
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "ec2:ModifyInstanceAttribute",
+                                        "ec2:*Reserved*",
+                                        "ec2:*Spot*",
+                                        "ec2:*Host*",
+                                        "dynamodb:*Reserved*",
+                                        "rds:*Reserved*",
+                                        "elasticache:*Reserved*",
+                                        "redshift:*Reserved*",
+                                        "aws-marketplace:*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "User": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "LoginProfile": {
+                    "Password": {
+                        "Fn::FindInMap": [
+                            "UserConfig",
+                            "Login",
+                            "Pass"
+                        ]
+                    }
+                },
+                "Path": "/",
+                "Groups": [
+                    "Students"
+                ],
+                "UserName": {
+                    "Fn::FindInMap": [
+                        "UserConfig",
+                        "Login",
+                        "Name"
+                    ]
+                }
+            }
+        }
+    }
+}
