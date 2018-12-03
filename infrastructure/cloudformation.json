@@ -10,11 +10,6 @@
             "Type": "String",
             "Default": "us-west-2"
         },
-        "KeyName": {
-            "Description": "Keypair name",
-            "Type": "String",
-            "Default": "{KeyName}"
-        },
         "AMI": {
             "Type": "String",
             "Default": "ami-6b933213"
@@ -31,6 +26,12 @@
             },
             "Public": {
                 "CIDR": "10.10.10.0/24"
+            }
+        },
+        "UserConfig": {
+            "Login": {
+                "Name": "student",
+                "Pass": "password"
             }
         }
     },
@@ -125,7 +126,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "KeyName": {
-                    "Ref": "KeyName"
+                    "Ref": "AWS::AccountId"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
